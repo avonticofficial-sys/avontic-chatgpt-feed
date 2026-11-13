@@ -54,6 +54,7 @@ jobs:
           assert reader,'No XML product records found'
           source_ids,output_ids,samples=set(),set(),[]
           rows,out_of_stock,groups=0,0,set()
+          variant_combinations=set();duplicate_combinations=0
           output=Path(os.environ['OUTPUT']);output.mkdir(parents=True,exist_ok=True)
           def money(v):
               if not re.fullmatch(r'[0-9]+(?:\.[0-9]{1,2})? USD',v or ''):raise ValueError('Invalid USD money: '+repr(v))
@@ -88,6 +89,9 @@ jobs:
                   if group:
                       if group==ident:raise ValueError('Group ID equals variant ID')
                       x.update(group_id=group,listing_has_variations=True,variant_dict=opts);groups.add(group)
+                      combination=(group,json.dumps(opts,sort_keys=True))
+                      if combination in variant_combinations:duplicate_combinations+=1
+                      variant_combinations.add(combination)
                   for key in ['color','size','material','condition','mpn','gender','age_group']:
                       if p.get(key):x[key]=p[key]
                   sale=p.get('sale_price','')
@@ -96,11 +100,11 @@ jobs:
                   if images:x['additional_image_urls']=[v.strip() for v in images.split(',') if v.strip()]
                   if av=='out_of_stock':out_of_stock+=1
                   output_ids.add(ident);dest.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
-                  if len(samples)<3:samples.append(x)
+                  if rows in [1,11035,22069,33103,44137]:samples.append({k:x.get(k) for k in ['item_id','title','url','image_url','price','availability','group_id','variant_dict']})
           assert rows==len(source_ids)==len(output_ids) and source_ids==output_ids,'Variant coverage mismatch'
           assert rows>=44137,'Catalog below requested baseline; investigate before publishing'
           assert (output/'products.jsonl.gz').stat().st_size<95000000,'Feed exceeds hosting file limit'
-          report={'generated_at':datetime.now(timezone.utc).isoformat(),'source_rows':rows,'output_rows':len(output_ids),'unique_variant_ids':len(output_ids),'missing_variants':len(source_ids-output_ids),'extra_variants':len(output_ids-source_ids),'groups':len(groups),'out_of_stock':out_of_stock,'required_fields_validated':True,'numeric_variant_urls_validated':True,'source_sha256':hashlib.sha256(data).hexdigest(),'source_columns':sorted(reader[0].keys()),'compressed_bytes':(output/'products.jsonl.gz').stat().st_size,'samples':samples}
+          report={'generated_at':datetime.now(timezone.utc).isoformat(),'source_rows':rows,'output_rows':len(output_ids),'unique_variant_ids':len(output_ids),'missing_variants':len(source_ids-output_ids),'extra_variants':len(output_ids-source_ids),'groups':len(groups),'duplicate_variant_combinations':duplicate_combinations,'out_of_stock':out_of_stock,'required_fields_validated':True,'numeric_variant_urls_validated':True,'source_sha256':hashlib.sha256(data).hexdigest(),'source_columns':sorted(reader[0].keys()),'compressed_bytes':(output/'products.jsonl.gz').stat().st_size,'samples':samples}
           (output/'validation.json').write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')
           print(json.dumps(report,indent=2,ensure_ascii=False))
           PY
