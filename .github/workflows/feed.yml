@@ -23,12 +23,12 @@ jobs:
           SOURCE_FEED_URL: ${{ secrets.SOURCE_FEED_URL }}
         run: |
           python3 - <<'PY'
-          import csv, gzip, hashlib, html, io, json, os, re, urllib.request
+          import csv, gzip, hashlib, html, io, json, os, re, urllib.request, xml.etree.ElementTree as ET
           from datetime import datetime, timezone
           from decimal import Decimal
           from pathlib import Path
           from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode
-          source=os.environ['SOURCE_FEED_URL']
+          source=os.environ['SOURCE_FEED_URL'].removesuffix('.csv')+'.xml'
           if not source: raise ValueError('Configure SOURCE_FEED_URL repository secret')
           req=urllib.request.Request(source,headers={'User-Agent':'Avontic-ChatGPT-Feed/1.0'})
           try:
@@ -36,7 +36,21 @@ jobs:
           except Exception:
               raise RuntimeError('Source download failed; source URL redacted') from None
           csv.field_size_limit(10000000)
-          reader=csv.DictReader(io.StringIO(data.decode('utf-8-sig')))
+          reader=[]
+          def local(tag):return tag.rsplit('}',1)[-1]
+          for element in ET.fromstring(data).findall('./channel/item'):
+              record={}
+              for child in element:
+                  key=local(child.tag)
+                  if key=='product_detail':
+                      detail={local(v.tag):(v.text or '').strip() for v in child}
+                      if detail.get('attribute_name') and detail.get('attribute_value'):
+                          record['option_'+detail['attribute_name']]=detail['attribute_value']
+                  elif key=='additional_image_link' and key in record:
+                      record[key]+=','+(child.text or '').strip()
+                  else:record[key]=(child.text or '').strip()
+              reader.append(record)
+          assert reader,'No XML product records found'
           source_ids,output_ids,samples=set(),set(),[]
           rows,out_of_stock,groups=0,0,set()
           output=Path(os.environ['OUTPUT']);output.mkdir(parents=True,exist_ok=True)
@@ -47,7 +61,7 @@ jobs:
           def plain(v):return re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',v or ''))).strip()
           with gzip.open(output/'products.jsonl.gz','wt',encoding='utf-8',newline='\n') as dest:
               for raw in reader:
-                  p={k.strip().removeprefix('g:'):(v or '').strip() for k,v in raw.items() if k}
+                  p=raw
                   if not any(p.values()):continue
                   rows+=1
                   ident=p.get('item_id') or p.get('id') or p.get('sku')
@@ -85,7 +99,7 @@ jobs:
           assert rows==len(source_ids)==len(output_ids) and source_ids==output_ids,'Variant coverage mismatch'
           assert rows>=44137,'Catalog below requested baseline; investigate before publishing'
           assert (output/'products.jsonl.gz').stat().st_size<95000000,'Feed exceeds hosting file limit'
-          report={'generated_at':datetime.now(timezone.utc).isoformat(),'source_rows':rows,'output_rows':len(output_ids),'unique_variant_ids':len(output_ids),'missing_variants':len(source_ids-output_ids),'extra_variants':len(output_ids-source_ids),'groups':len(groups),'out_of_stock':out_of_stock,'required_fields_validated':True,'numeric_variant_urls_validated':True,'source_sha256':hashlib.sha256(data).hexdigest(),'source_columns':reader.fieldnames,'compressed_bytes':(output/'products.jsonl.gz').stat().st_size,'samples':samples}
+          report={'generated_at':datetime.now(timezone.utc).isoformat(),'source_rows':rows,'output_rows':len(output_ids),'unique_variant_ids':len(output_ids),'missing_variants':len(source_ids-output_ids),'extra_variants':len(output_ids-source_ids),'groups':len(groups),'out_of_stock':out_of_stock,'required_fields_validated':True,'numeric_variant_urls_validated':True,'source_sha256':hashlib.sha256(data).hexdigest(),'source_columns':sorted(reader[0].keys()),'compressed_bytes':(output/'products.jsonl.gz').stat().st_size,'samples':samples}
           (output/'validation.json').write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')
           print(json.dumps(report,indent=2,ensure_ascii=False))
           PY
