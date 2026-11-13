@@ -52,6 +52,17 @@ jobs:
                   else:record[key]=(child.text or child.attrib.get('href','')).strip()
               reader.append(record)
           assert reader,'No XML product records found'
+          def options_for(p):
+              opts={k:p[k] for k in ['color','size','material','pattern'] if p.get(k)}
+              opts.update({k.removeprefix('option_').replace('_',' '):v for k,v in p.items() if k.startswith('option_') and v})
+              return opts
+          source_combinations=set();ambiguous_groups=set();standalone=0
+          for p in reader:
+              group=p.get('group_id') or p.get('item_group_id')
+              if not group:continue
+              signature=(group,json.dumps(options_for(p),sort_keys=True))
+              if signature in source_combinations:ambiguous_groups.add(group)
+              source_combinations.add(signature)
           source_ids,output_ids,samples=set(),set(),[]
           rows,out_of_stock,groups=0,0,set()
           variant_combinations=set();duplicate_combinations=0
@@ -86,12 +97,13 @@ jobs:
                   group=p.get('group_id') or p.get('item_group_id')
                   opts={k:p[k] for k in ['color','size','material','pattern'] if p.get(k)}
                   opts.update({k.removeprefix('option_').replace('_',' '):v for k,v in p.items() if k.startswith('option_') and v})
-                  if group:
+                  if group and group not in ambiguous_groups:
                       if group==ident:raise ValueError('Group ID equals variant ID')
                       x.update(group_id=group,listing_has_variations=True,variant_dict=opts);groups.add(group)
                       combination=(group,json.dumps(opts,sort_keys=True))
                       if combination in variant_combinations:duplicate_combinations+=1
                       variant_combinations.add(combination)
+                  else:standalone+=1
                   for key in ['color','size','material','condition','mpn','gender','age_group']:
                       if p.get(key):x[key]=p[key]
                   sale=p.get('sale_price','')
@@ -102,9 +114,10 @@ jobs:
                   output_ids.add(ident);dest.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
                   if rows in [1,11035,22069,33103,44137]:samples.append({k:x.get(k) for k in ['item_id','title','url','image_url','price','availability','group_id','variant_dict']})
           assert rows==len(source_ids)==len(output_ids) and source_ids==output_ids,'Variant coverage mismatch'
+          assert duplicate_combinations==0,'Ambiguous grouped variant options'
           assert rows>=44137,'Catalog below requested baseline; investigate before publishing'
           assert (output/'products.jsonl.gz').stat().st_size<95000000,'Feed exceeds hosting file limit'
-          report={'generated_at':datetime.now(timezone.utc).isoformat(),'source_rows':rows,'output_rows':len(output_ids),'unique_variant_ids':len(output_ids),'missing_variants':len(source_ids-output_ids),'extra_variants':len(output_ids-source_ids),'groups':len(groups),'duplicate_variant_combinations':duplicate_combinations,'out_of_stock':out_of_stock,'required_fields_validated':True,'numeric_variant_urls_validated':True,'source_sha256':hashlib.sha256(data).hexdigest(),'source_columns':sorted(reader[0].keys()),'compressed_bytes':(output/'products.jsonl.gz').stat().st_size,'samples':samples}
+          report={'generated_at':datetime.now(timezone.utc).isoformat(),'source_rows':rows,'output_rows':len(output_ids),'unique_variant_ids':len(output_ids),'missing_variants':len(source_ids-output_ids),'extra_variants':len(output_ids-source_ids),'groups':len(groups),'duplicate_variant_combinations':duplicate_combinations,'source_groups_with_ambiguous_options':len(ambiguous_groups),'standalone_variant_items':standalone,'out_of_stock':out_of_stock,'required_fields_validated':True,'numeric_variant_urls_validated':True,'source_sha256':hashlib.sha256(data).hexdigest(),'source_columns':sorted(reader[0].keys()),'compressed_bytes':(output/'products.jsonl.gz').stat().st_size,'samples':samples}
           (output/'validation.json').write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')
           print(json.dumps(report,indent=2,ensure_ascii=False))
           PY
