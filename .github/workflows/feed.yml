@@ -1,0 +1,103 @@
+name: Refresh ChatGPT product feed
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/feed.yml']
+  schedule:
+    - cron: '23 17 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: chatgpt-feed
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Convert and validate every variant
+        env:
+          OUTPUT: ${{ runner.temp }}/feed-output
+          SOURCE_FEED_URL: ${{ secrets.SOURCE_FEED_URL }}
+        run: |
+          python3 - <<'PY'
+          import csv, gzip, hashlib, html, io, json, os, re, urllib.request
+          from datetime import datetime, timezone
+          from decimal import Decimal
+          from pathlib import Path
+          from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode
+          source=os.environ['SOURCE_FEED_URL']
+          if not source: raise ValueError('Configure SOURCE_FEED_URL repository secret')
+          req=urllib.request.Request(source,headers={'User-Agent':'Avontic-ChatGPT-Feed/1.0'})
+          try:
+              with urllib.request.urlopen(req,timeout=180) as response:data=response.read()
+          except Exception:
+              raise RuntimeError('Source download failed; source URL redacted') from None
+          csv.field_size_limit(10000000)
+          reader=csv.DictReader(io.StringIO(data.decode('utf-8-sig')))
+          source_ids,output_ids,samples=set(),set(),[]
+          rows,out_of_stock,groups=0,0,set()
+          output=Path(os.environ['OUTPUT']);output.mkdir(parents=True,exist_ok=True)
+          def money(v):
+              if not re.fullmatch(r'[0-9]+(?:\.[0-9]{1,2})? USD',v or ''):raise ValueError('Invalid USD money: '+repr(v))
+              if Decimal(v.split()[0])<=0:raise ValueError('Nonpositive price')
+              return v
+          def plain(v):return re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',v or ''))).strip()
+          with gzip.open(output/'products.jsonl.gz','wt',encoding='utf-8',newline='\n') as dest:
+              for raw in reader:
+                  p={k.strip().removeprefix('g:'):(v or '').strip() for k,v in raw.items() if k}
+                  if not any(p.values()):continue
+                  rows+=1
+                  ident=p.get('item_id') or p.get('id') or p.get('sku')
+                  if not ident or ident in source_ids:raise ValueError('Missing or duplicate source ID: '+str(ident))
+                  source_ids.add(ident)
+                  av=re.sub(r'\s+','_',p.get('availability','').lower());av={'preorder':'pre_order'}.get(av,av)
+                  if av not in ['in_stock','out_of_stock','pre_order','backorder','unknown']:raise ValueError('Invalid stock status: '+ident)
+                  parts=urlsplit(p.get('url') or p.get('link') or '');query=parse_qs(parts.query,keep_blank_values=True)
+                  variant=p.get('variant_id') or ident.rsplit('_',1)[-1]
+                  if not variant.isdigit():raise ValueError('Cannot identify numeric Shopify variant: '+ident)
+                  if query.get('variant') and query['variant']!=[variant]:raise ValueError('Wrong variant URL: '+ident)
+                  query['variant']=[variant];query.update(utm_source=['chatgpt'],utm_medium=['product_feed'],utm_campaign=['catalog'])
+                  url=urlunsplit((parts.scheme,parts.netloc,parts.path,urlencode(query,doseq=True),parts.fragment))
+                  x={'item_id':ident,'title':p.get('title',''),'description':plain(p.get('description','')),'url':url,'brand':p.get('brand',''),'seller_name':'Avontic','seller_url':'https://www.avontic.com','image_url':p.get('image_url') or p.get('image_link') or '', 'price':money(p.get('price','')),'availability':av,'target_countries':['US'],'store_country':'US','is_eligible_search':True,'is_eligible_checkout':False}
+                  for key in ['item_id','title','description','url','brand','seller_name','image_url','price','availability']:
+                      if not x[key]:raise ValueError('Missing '+key+' for '+ident)
+                  for key in ['url','image_url']:
+                      u=urlsplit(x[key])
+                      if u.scheme not in ['https','http'] or not u.netloc:raise ValueError('Invalid '+key+' for '+ident)
+                  group=p.get('group_id') or p.get('item_group_id')
+                  opts={k:p[k] for k in ['color','size','material','pattern'] if p.get(k)}
+                  opts.update({k.removeprefix('option_').replace('_',' '):v for k,v in p.items() if k.startswith('option_') and v})
+                  if group:
+                      if group==ident:raise ValueError('Group ID equals variant ID')
+                      x.update(group_id=group,listing_has_variations=True,variant_dict=opts);groups.add(group)
+                  for key in ['color','size','material','condition','mpn','gender','age_group']:
+                      if p.get(key):x[key]=p[key]
+                  sale=p.get('sale_price','')
+                  if sale and Decimal(money(sale).split()[0])<Decimal(x['price'].split()[0]):x['sale_price']=sale
+                  images=p.get('additional_image_link') or p.get('additional_image_urls')
+                  if images:x['additional_image_urls']=[v.strip() for v in images.split(',') if v.strip()]
+                  if av=='out_of_stock':out_of_stock+=1
+                  output_ids.add(ident);dest.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
+                  if len(samples)<3:samples.append(x)
+          assert rows==len(source_ids)==len(output_ids) and source_ids==output_ids,'Variant coverage mismatch'
+          assert rows>=44137,'Catalog below requested baseline; investigate before publishing'
+          assert (output/'products.jsonl.gz').stat().st_size<95000000,'Feed exceeds hosting file limit'
+          report={'generated_at':datetime.now(timezone.utc).isoformat(),'source_rows':rows,'output_rows':len(output_ids),'unique_variant_ids':len(output_ids),'missing_variants':len(source_ids-output_ids),'extra_variants':len(output_ids-source_ids),'groups':len(groups),'out_of_stock':out_of_stock,'required_fields_validated':True,'numeric_variant_urls_validated':True,'source_sha256':hashlib.sha256(data).hexdigest(),'source_columns':reader.fieldnames,'compressed_bytes':(output/'products.jsonl.gz').stat().st_size,'samples':samples}
+          (output/'validation.json').write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')
+          print(json.dumps(report,indent=2,ensure_ascii=False))
+          PY
+      - name: Publish only validated feed
+        env:
+          OUTPUT: ${{ runner.temp }}/feed-output
+        run: |
+          git checkout --orphan feed-output
+          git rm -rf .
+          cp "$OUTPUT/products.jsonl.gz" "$OUTPUT/validation.json" .
+          git config user.name 'Avontic Feed Automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add products.jsonl.gz validation.json
+          git commit -m 'Publish validated ChatGPT catalog'
+          git push origin HEAD:feed --force
