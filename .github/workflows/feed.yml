@@ -38,7 +38,8 @@ jobs:
           csv.field_size_limit(10000000)
           reader=[]
           def local(tag):return tag.rsplit('}',1)[-1]
-          for element in ET.fromstring(data).findall('./channel/item'):
+          for element in ET.fromstring(data).iter():
+              if local(element.tag) not in ['item','entry']:continue
               record={}
               for child in element:
                   key=local(child.tag)
@@ -48,7 +49,7 @@ jobs:
                           record['option_'+detail['attribute_name']]=detail['attribute_value']
                   elif key=='additional_image_link' and key in record:
                       record[key]+=','+(child.text or '').strip()
-                  else:record[key]=(child.text or '').strip()
+                  else:record[key]=(child.text or child.attrib.get('href','')).strip()
               reader.append(record)
           assert reader,'No XML product records found'
           source_ids,output_ids,samples=set(),set(),[]
