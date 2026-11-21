@@ -1,0 +1,102 @@
+{
+  "generated_at": "2026-11-21T17:57:49.616197+00:00",
+  "source_rows": 44201,
+  "output_rows": 44201,
+  "unique_variant_ids": 44201,
+  "missing_variants": 0,
+  "extra_variants": 0,
+  "groups": 1323,
+  "duplicate_variant_combinations": 0,
+  "source_groups_with_ambiguous_options": 142,
+  "standalone_variant_items": 3475,
+  "out_of_stock": 1,
+  "required_fields_validated": true,
+  "numeric_variant_urls_validated": true,
+  "source_sha256": "0c557d1bd74e87a153d8cfa6d69e145f5fd96bb8176a7df5cc3d36ff33ae8e38",
+  "source_columns": [
+    "additional_image_link",
+    "availability",
+    "brand",
+    "checkout_link_template",
+    "color",
+    "condition",
+    "description",
+    "id",
+    "identifier_exists",
+    "image_link",
+    "item_group_id",
+    "link",
+    "mpn",
+    "price",
+    "product_type",
+    "shipping_weight",
+    "title"
+  ],
+  "compressed_bytes": 4798138,
+  "samples": [
+    {
+      "item_id": "shopify_US_8015213461547_44455783596075",
+      "title": "SatinShield Magnetic Case for Samsung Galaxy Z Fold 8 - Purple",
+      "url": "https://www.avontic.com/products/satinshield-magnetic-case-samsung-galaxy-z-fold-8?variant=44455783596075&currency=USD&utm_source=chatgpt&utm_medium=product_feed&utm_campaign=catalog",
+      "image_url": "https://cdn.shopify.com/s/files/1/0168/9658/9888/files/satinshield-variant-purple_4e917686-23e6-44b1-a528-6fbede4a5eb2.png?v=1784723269",
+      "price": "54.99 USD",
+      "availability": "in_stock",
+      "group_id": "8015213461547",
+      "variant_dict": {
+        "color": "Purple"
+      }
+    },
+    {
+      "item_id": "shopify_US_7093567291435_40745346269227",
+      "title": "DefenderShieldX Pixel 7 Shockproof Phone Case - for Google 7 Pro Pink and Black",
+      "url": "https://www.avontic.com/products/for-google-pixel-7a-pixel-7-pro-case-military-grade-shockproof-non-slip-soft-silicone-airbag-bumper-for-google-pixel-7a-2023?variant=40745346269227&currency=USD&utm_source=chatgpt&utm_medium=product_feed&utm_campaign=catalog",
+      "image_url": "https://cdn.shopify.com/s/files/1/0168/9658/9888/products/S1c534f0821c94f60900ddeeeb1fa8cfam.jpg?v=1685143413",
+      "price": "44.95 USD",
+      "availability": "in_stock",
+      "group_id": "7093567291435",
+      "variant_dict": {
+        "color": "Pink and Black",
+        "model": "for Google 7 Pro"
+      }
+    },
+    {
+      "item_id": "shopify_US_7274164944939_41183942443051",
+      "title": "Premium Titanium Alloy 360° Magnetic Stand Case for iPhone 16 & Earlier Models - Navy Blue For iPhone 14 Plus",
+      "url": "https://www.avontic.com/products/premium-titanium-alloy-360-magnetic-stand-case-for-iphone-16-earlier-models?variant=41183942443051&currency=USD&utm_source=chatgpt&utm_medium=product_feed&utm_campaign=catalog",
+      "image_url": "https://cdn.shopify.com/s/files/1/0168/9658/9888/files/Af622ae04774e4d03842df251c1e3d145d.webp?v=1727112112",
+      "price": "69.99 USD",
+      "availability": "in_stock",
+      "group_id": "7274164944939",
+      "variant_dict": {
+        "color": "Navy Blue",
+        "model": "For iPhone 14 Plus"
+      }
+    },
+    {
+      "item_id": "shopify_US_8106100785195_45350582550571",
+      "title": "FormaLift Prism Create — iPad Case + Stylus Bundle - Black and Orange iPad Pro 13-inch (M4 / M5)",
+      "url": "https://www.avontic.com/products/formalift-prism-create-ipad-bundle?variant=45350582550571&currency=USD&utm_source=chatgpt&utm_medium=product_feed&utm_campaign=catalog",
+      "image_url": "https://cdn.shopify.com/s/files/1/0168/9658/9888/files/prism-2-create-ipad-bundle.png?v=1789395565",
+      "price": "169.98 USD",
+      "availability": "in_stock",
+      "group_id": "8106100785195",
+      "variant_dict": {
+        "color": "Black and Orange",
+        "ipad model": "iPad Pro 13-inch (M4 / M5)"
+      }
+    },
+    {
+      "item_id": "shopify_US_7787950440491_42697745465387",
+      "title": "RhinoGuard ArmorPro Business-Grade Heavy-Duty iPad Case - Navy / Green iPad Air 11 (2024 M2 / 2025 M3 / 2026 M4)",
+      "url": "https://www.avontic.com/products/shockproof-armor-stand-case-with-kickstand-hand-strap-for-ipad-mini-ipad-air-ipad-pro?variant=42697745465387&currency=USD&utm_source=chatgpt&utm_medium=product_feed&utm_campaign=catalog",
+      "image_url": "https://cdn.shopify.com/s/files/1/0168/9658/9888/files/Sb1938891ee094b309288078f900aae11l.webp?v=1772039839",
+      "price": "149.99 USD",
+      "availability": "in_stock",
+      "group_id": "7787950440491",
+      "variant_dict": {
+        "color": "Navy / Green",
+        "size": "iPad Air 11 (2024 M2 / 2025 M3 / 2026 M4)"
+      }
+    }
+  ]
+}
